@@ -714,7 +714,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
             List<string> additionalFetchSpecs = new List<string>();
             if (IsPullRequest(sourceBranch))
             {
-                additionalFetchSpecs.Add("+refs/heads/*:refs/remotes/origin/*");
                 additionalFetchSpecs.Add(StringUtil.Format("+{0}:{1}", sourceBranch, GetRemoteRefName(sourceBranch)));
             }
 
