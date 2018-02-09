@@ -708,28 +708,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
                     }
                 }
             }
-
-            // If this is a build for a pull request, then include
-            // the pull request reference as an additional ref.
-            List<string> additionalFetchSpecs = new List<string>();
-            if (IsPullRequest(sourceBranch))
-            {
-                additionalFetchSpecs.Add(StringUtil.Format("+{0}:{1}", sourceBranch, GetRemoteRefName(sourceBranch)));
-            }
-
-            int exitCode_fetch = await _gitCommandManager.GitFetch(executionContext, targetPath, "origin", fetchDepth, additionalFetchSpecs, string.Join(" ", additionalFetchArgs), cancellationToken);
-            if (exitCode_fetch != 0)
-            {
-                throw new InvalidOperationException($"Git fetch failed with exit code: {exitCode_fetch}");
-            }
-
-            // Checkout
-            // sourceToBuild is used for checkout
+            
+            // sourcesToBuild is used for both fetch and checkout
             // if sourceBranch is a PR branch or sourceVersion is null, make sure branch name is a remote branch. we need checkout to detached head. 
             // (change refs/heads to refs/remotes/origin, refs/pull to refs/remotes/pull, or leave it as it when the branch name doesn't contain refs/...)
             // if sourceVersion provide, just use that for checkout, since when you checkout a commit, it will end up in detached head.
-            cancellationToken.ThrowIfCancellationRequested();
-            executionContext.Progress(80, "Starting checkout...");
             string sourcesToBuild;
             if (IsPullRequest(sourceBranch) || string.IsNullOrEmpty(sourceVersion))
             {
@@ -739,6 +722,32 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
             {
                 sourcesToBuild = sourceVersion;
             }
+
+            // If this is a build for a pull request, then include
+            // the pull request reference as an additional ref.
+            List<string> additionalFetchSpecs = new List<string>();
+            if (IsPullRequest(sourceBranch))
+            {
+                // Fetch the exact commit id we are checking out 
+                // as well as the ref name for the PR branch
+                additionalFetchSpecs.Add(sourcesToBuild);
+                additionalFetchSpecs.Add(StringUtil.Format("+{0}:{1}", sourceBranch, GetRemoteRefName(sourceBranch)));
+            }
+            else
+            {
+                // Fetch the exact commit id we are checking out 
+                additionalFetchSpecs.Add(sourcesToBuild);
+            }
+
+            int exitCode_fetch = await _gitCommandManager.GitFetch(executionContext, targetPath, "origin", fetchDepth, additionalFetchSpecs, string.Join(" ", additionalFetchArgs), cancellationToken);
+            if (exitCode_fetch != 0)
+            {
+                throw new InvalidOperationException($"Git fetch failed with exit code: {exitCode_fetch}");
+            }
+
+            // Checkout
+            cancellationToken.ThrowIfCancellationRequested();
+            executionContext.Progress(80, "Starting checkout...");            
 
             // fetch lfs object upfront, this will avoid fetch lfs object during checkout which cause checkout taking forever
             // since checkout will fetch lfs object 1 at a time, while git lfs fetch will fetch lfs object in parallel.
